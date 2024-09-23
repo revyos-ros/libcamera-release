@@ -1,3 +1,26 @@
+## libcamera (humble) - 0.1.0-3
+
+The packages in the `libcamera` repository were released into the `humble` distro by running `/home/z572/gits/revyos-ros/venv2/bin/bloom-release -r humble libcamera --override-release-repository-push-url git@github.com:revyos-ros/libcamera-release.git` on `Mon, 23 Sep 2024 14:30:46 -0000`
+
+The `libcamera` package was released.
+
+Version of package(s) in repository `libcamera`:
+
+- upstream repository: https://git.libcamera.org/libcamera/libcamera.git
+- release repository: https://github.com/revyos-ros/libcamera-release.git
+- rosdistro version: `0.1.0-3`
+- old version: `0.1.0-2`
+- new version: `0.1.0-3`
+
+Versions of tools used:
+
+- bloom version: `0.12.0`
+- catkin_pkg version: `1.0.0`
+- rosdep version: `0.22.2`
+- rosdistro version: `0.9.0`
+- vcstools version: `0.1.42`
+
+
 ## libcamera (humble) - 0.1.0-2
 
 The packages in the `libcamera` repository were released into the `humble` distro by running `/home/z572/gits/revyos-ros/venv2/bin/bloom-release -r humble libcamera --override-release-repository-push-url git@github.com:revyos-ros/libcamera-release.git` on `Mon, 23 Sep 2024 14:27:12 -0000`
