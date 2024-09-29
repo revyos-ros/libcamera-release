@@ -2,17 +2,18 @@
 /*
  * Copyright (C) 2020, Google Inc.
  *
- * frames.cpp - Intel IPU3 Frames helper
+ * Intel IPU3 Frames helper
  */
 
 #include "frames.h"
+
+#include <libcamera/base/log.h>
 
 #include <libcamera/framebuffer.h>
 #include <libcamera/request.h>
 
 #include "libcamera/internal/framebuffer.h"
 #include "libcamera/internal/pipeline_handler.h"
-#include "libcamera/internal/v4l2_videodevice.h"
 
 namespace libcamera {
 

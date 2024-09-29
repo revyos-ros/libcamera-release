@@ -2,13 +2,12 @@
 /*
  * Copyright (C) 2019, Google Inc.
  *
- * formats.h - libcamera image formats
+ * libcamera image formats
  */
 
 #pragma once
 
 #include <array>
-#include <map>
 #include <vector>
 
 #include <libcamera/geometry.h>

@@ -2,7 +2,7 @@
 /*
  * Copyright (C) 2018, Google Inc.
  *
- * camera_manager.h - Camera management
+ * Camera management
  */
 
 #include "libcamera/internal/camera_manager.h"
@@ -15,6 +15,7 @@
 
 #include "libcamera/internal/camera.h"
 #include "libcamera/internal/device_enumerator.h"
+#include "libcamera/internal/ipa_manager.h"
 #include "libcamera/internal/pipeline_handler.h"
 
 /**
@@ -23,6 +24,7 @@
  */
 
 /**
+ * \internal
  * \file libcamera/internal/camera_manager.h
  * \brief Internal camera manager support
  */
@@ -34,9 +36,11 @@ namespace libcamera {
 
 LOG_DEFINE_CATEGORY(Camera)
 
+#ifndef __DOXYGEN_PUBLIC__
 CameraManager::Private::Private()
 	: initialized_(false)
 {
+	ipaManager_ = std::make_unique<IPAManager>();
 }
 
 int CameraManager::Private::start()
@@ -99,16 +103,37 @@ int CameraManager::Private::init()
 
 void CameraManager::Private::createPipelineHandlers()
 {
-	CameraManager *const o = LIBCAMERA_O_PTR();
-
 	/*
 	 * \todo Try to read handlers and order from configuration
-	 * file and only fallback on all handlers if there is no
-	 * configuration file.
+	 * file and only fallback on environment variable or all handlers, if
+	 * there is no configuration file.
 	 */
+	const char *pipesList =
+		utils::secure_getenv("LIBCAMERA_PIPELINES_MATCH_LIST");
+	if (pipesList) {
+		/*
+		 * When a list of preferred pipelines is defined, iterate
+		 * through the ordered list to match the enumerated devices.
+		 */
+		for (const auto &pipeName : utils::split(pipesList, ",")) {
+			const PipelineHandlerFactoryBase *factory;
+			factory = PipelineHandlerFactoryBase::getFactoryByName(pipeName);
+			if (!factory)
+				continue;
+
+			LOG(Camera, Debug)
+				<< "Found listed pipeline handler '"
+				<< pipeName << "'";
+			pipelineFactoryMatch(factory);
+		}
+
+		return;
+	}
+
 	const std::vector<PipelineHandlerFactoryBase *> &factories =
 		PipelineHandlerFactoryBase::factories();
 
+	/* Match all the registered pipeline handlers. */
 	for (const PipelineHandlerFactoryBase *factory : factories) {
 		LOG(Camera, Debug)
 			<< "Found registered pipeline handler '"
@@ -117,15 +142,23 @@ void CameraManager::Private::createPipelineHandlers()
 		 * Try each pipeline handler until it exhaust
 		 * all pipelines it can provide.
 		 */
-		while (1) {
-			std::shared_ptr<PipelineHandler> pipe = factory->create(o);
-			if (!pipe->match(enumerator_.get()))
-				break;
+		pipelineFactoryMatch(factory);
+	}
+}
 
-			LOG(Camera, Debug)
-				<< "Pipeline handler \"" << factory->name()
-				<< "\" matched";
-		}
+void CameraManager::Private::pipelineFactoryMatch(const PipelineHandlerFactoryBase *factory)
+{
+	CameraManager *const o = LIBCAMERA_O_PTR();
+
+	/* Provide as many matching pipelines as possible. */
+	while (1) {
+		std::shared_ptr<PipelineHandler> pipe = factory->create(o);
+		if (!pipe->match(enumerator_.get()))
+			break;
+
+		LOG(Camera, Debug)
+			<< "Pipeline handler \"" << factory->name()
+			<< "\" matched";
 	}
 }
 
@@ -219,6 +252,14 @@ void CameraManager::Private::removeCamera(std::shared_ptr<Camera> camera)
 	CameraManager *const o = LIBCAMERA_O_PTR();
 	o->cameraRemoved.emit(camera);
 }
+
+/**
+ * \fn CameraManager::Private::ipaManager() const
+ * \brief Retrieve the IPAManager
+ * \context This function is \threadsafe.
+ * \return The IPAManager for this CameraManager
+ */
+#endif /* __DOXYGEN_PUBLIC__ */
 
 /**
  * \class CameraManager

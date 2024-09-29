@@ -2,7 +2,7 @@
 /*
  * Copyright (C) 2019, Google Inc.
  *
- * thread.cpp - Thread support
+ * Thread support
  */
 
 #include <libcamera/base/thread.h>
@@ -18,6 +18,7 @@
 #include <libcamera/base/log.h>
 #include <libcamera/base/message.h>
 #include <libcamera/base/mutex.h>
+#include <libcamera/base/object.h>
 
 /**
  * \page thread Thread Support
@@ -63,42 +64,6 @@
  * receiver's event loop, running in the receiver's thread. This mechanism can
  * be overridden by selecting a different connection type when calling
  * Signal::connect().
- *
- * \section thread-reentrancy Reentrancy and Thread-Safety
- *
- * Through the documentation, several terms are used to define how classes and
- * their member functions can be used from multiple threads.
- *
- * - A **reentrant** function may be called simultaneously from multiple
- *   threads if and only if each invocation uses a different instance of the
- *   class. This is the default for all member functions not explictly marked
- *   otherwise.
- *
- * - \anchor thread-safe A **thread-safe** function may be called
- *   simultaneously from multiple threads on the same instance of a class. A
- *   thread-safe function is thus reentrant. Thread-safe functions may also be
- *   called simultaneously with any other reentrant function of the same class
- *   on the same instance.
- *
- * - \anchor thread-bound A **thread-bound** function may be called only from
- *   the thread that the class instances lives in (see section \ref
- *   thread-objects). For instances of classes that do not derive from the
- *   Object class, this is the thread in which the instance was created. A
- *   thread-bound function is not thread-safe, and may or may not be reentrant.
- *
- * Neither reentrancy nor thread-safety, in this context, mean that a function
- * may be called simultaneously from the same thread, for instance from a
- * callback invoked by the function. This may deadlock and isn't allowed unless
- * separately documented.
- *
- * A class is defined as reentrant, thread-safe or thread-bound if all its
- * member functions are reentrant, thread-safe or thread-bound respectively.
- * Some member functions may additionally be documented as having additional
- * thread-related attributes.
- *
- * Most classes are reentrant but not thread-safe, as making them fully
- * thread-safe would incur locking costs considered prohibitive for the
- * expected use cases.
  */
 
 /**
@@ -370,6 +335,12 @@ void Thread::run()
 
 void Thread::finishThread()
 {
+	/*
+	 * Objects may have been scheduled for deletion right before the thread
+	 * exited. Ensure they get deleted now, before the thread stops.
+	 */
+	dispatchMessages(Message::Type::DeferredDelete);
+
 	data_->mutex_.lock();
 	data_->running_ = false;
 	data_->mutex_.unlock();

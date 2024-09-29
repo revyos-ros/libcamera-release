@@ -2,7 +2,7 @@
 /*
  * Copyright (C) 2019, Google Inc.
  *
- * vimc.cpp - Vimc Image Processing Algorithm module
+ * Vimc Image Processing Algorithm module
  */
 #include <libcamera/ipa/vimc_ipa_interface.h>
 
@@ -14,6 +14,7 @@
 #include <iostream>
 
 #include <libcamera/base/file.h>
+#include <libcamera/base/flags.h>
 #include <libcamera/base/log.h>
 
 #include <libcamera/ipa/ipa_interface.h>
@@ -200,7 +201,7 @@ extern "C" {
 const struct IPAModuleInfo ipaModuleInfo = {
 	IPA_MODULE_API_VERSION,
 	0,
-	"PipelineHandlerVimc",
+	"vimc",
 	"vimc",
 };
 

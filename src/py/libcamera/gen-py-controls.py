@@ -4,9 +4,11 @@
 # Generate Python bindings controls from YAML
 
 import argparse
-import string
+import jinja2
 import sys
 import yaml
+
+from controls import Control
 
 
 def find_common_prefix(strings):
@@ -21,90 +23,86 @@ def find_common_prefix(strings):
     return prefix
 
 
-def generate_py(controls, mode):
-    out = ''
+def extend_control(ctrl, mode):
+    if ctrl.vendor != 'libcamera':
+        ctrl.klass = ctrl.vendor
+        ctrl.namespace = f'{ctrl.vendor}::'
+    else:
+        ctrl.klass = mode
+        ctrl.namespace = ''
 
-    for ctrl in controls:
-        name, ctrl = ctrl.popitem()
+    if not ctrl.is_enum:
+        return ctrl
 
-        if ctrl.get('draft'):
-            ns = 'libcamera::{}::draft::'.format(mode)
-            container = 'draft'
+    if mode == 'controls':
+        # Adjustments for controls
+        if ctrl.name == 'LensShadingMapMode':
+            prefix = 'LensShadingMapMode'
         else:
-            ns = 'libcamera::{}::'.format(mode)
-            container = 'controls'
+            prefix = find_common_prefix([e.name for e in ctrl.enum_values])
+    else:
+        # Adjustments for properties
+        prefix = find_common_prefix([e.name for e in ctrl.enum_values])
 
-        out += f'\t{container}.def_readonly_static("{name}", static_cast<const libcamera::ControlId *>(&{ns}{name}));\n\n'
+    for enum in ctrl.enum_values:
+        enum.py_name = enum.name[len(prefix):]
 
-        enum = ctrl.get('enum')
-        if not enum:
-            continue
-
-        cpp_enum = name + 'Enum'
-
-        out += '\tpy::enum_<{}{}>({}, \"{}\")\n'.format(ns, cpp_enum, container, cpp_enum)
-
-        if mode == 'controls':
-            # Adjustments for controls
-            if name == 'LensShadingMapMode':
-                prefix = 'LensShadingMapMode'
-            elif name == 'SceneFlicker':
-                # If we strip the prefix, we would get '50Hz', which is illegal name
-                prefix = ''
-            else:
-                prefix = find_common_prefix([e['name'] for e in enum])
-        else:
-            # Adjustments for properties
-            prefix = find_common_prefix([e['name'] for e in enum])
-
-        for entry in enum:
-            cpp_enum = entry['name']
-            py_enum = entry['name'][len(prefix):]
-
-            out += '\t\t.value(\"{}\", {}{})\n'.format(py_enum, ns, cpp_enum)
-
-        out += '\t;\n\n'
-
-    return {'controls': out}
-
-
-def fill_template(template, data):
-    template = open(template, 'rb').read()
-    template = template.decode('utf-8')
-    template = string.Template(template)
-    return template.substitute(data)
+    return ctrl
 
 
 def main(argv):
+    headers = {
+        'controls': 'control_ids.h',
+        'properties': 'property_ids.h',
+    }
+
     # Parse command line arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument('-o', dest='output', metavar='file', type=str,
-                        help='Output file name. Defaults to standard output if not specified.')
-    parser.add_argument('input', type=str,
-                        help='Input file name.')
-    parser.add_argument('template', type=str,
-                        help='Template file name.')
-    parser.add_argument('--mode', type=str, required=True,
+    parser.add_argument('--mode', '-m', type=str, required=True,
                         help='Mode is either "controls" or "properties"')
+    parser.add_argument('--output', '-o', metavar='file', type=str,
+                        help='Output file name. Defaults to standard output if not specified.')
+    parser.add_argument('--template', '-t', type=str, required=True,
+                        help='Template file name.')
+    parser.add_argument('input', type=str, nargs='+',
+                        help='Input file name.')
     args = parser.parse_args(argv[1:])
 
-    if args.mode not in ['controls', 'properties']:
+    if not headers.get(args.mode):
         print(f'Invalid mode option "{args.mode}"', file=sys.stderr)
         return -1
 
-    data = open(args.input, 'rb').read()
-    controls = yaml.safe_load(data)['controls']
+    controls = []
+    vendors = []
 
-    data = generate_py(controls, args.mode)
+    for input in args.input:
+        data = yaml.safe_load(open(input, 'rb').read())
 
-    data = fill_template(args.template, data)
+        vendor = data['vendor']
+        if vendor != 'libcamera':
+            vendors.append(vendor)
+
+        for ctrl in data['controls']:
+            ctrl = Control(*ctrl.popitem(), vendor)
+            controls.append(extend_control(ctrl, args.mode))
+
+    data = {
+        'mode': args.mode,
+        'header': headers[args.mode],
+        'vendors': vendors,
+        'controls': controls,
+    }
+
+    env = jinja2.Environment()
+    template = env.from_string(open(args.template, 'r', encoding='utf-8').read())
+    string = template.render(data)
 
     if args.output:
-        output = open(args.output, 'wb')
-        output.write(data.encode('utf-8'))
+        output = open(args.output, 'w', encoding='utf-8')
+        output.write(string)
         output.close()
     else:
-        sys.stdout.write(data)
+        sys.stdout.write(string)
 
     return 0
 

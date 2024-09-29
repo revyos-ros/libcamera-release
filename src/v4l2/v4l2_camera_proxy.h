@@ -2,7 +2,7 @@
 /*
  * Copyright (C) 2019, Google Inc.
  *
- * v4l2_camera_proxy.h - Proxy to V4L2 compatibility camera
+ * Proxy to V4L2 compatibility camera
  */
 
 #pragma once
@@ -67,6 +67,7 @@ private:
 	int vidioc_expbuf(V4L2CameraFile *file, struct v4l2_exportbuffer *arg);
 	int vidioc_streamon(V4L2CameraFile *file, int *arg);
 	int vidioc_streamoff(V4L2CameraFile *file, int *arg);
+	int vidioc_s_parm(V4L2CameraFile *file, struct v4l2_streamparm *arg);
 
 	bool hasOwnership(V4L2CameraFile *file);
 	int acquire(V4L2CameraFile *file);

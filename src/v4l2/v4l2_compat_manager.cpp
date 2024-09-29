@@ -2,7 +2,7 @@
 /*
  * Copyright (C) 2019, Google Inc.
  *
- * v4l2_compat_manager.cpp - V4L2 compatibility manager
+ * V4L2 compatibility manager
  */
 
 #include "v4l2_compat_manager.h"
@@ -10,7 +10,6 @@
 #include <dlfcn.h>
 #include <fcntl.h>
 #include <map>
-#include <stdarg.h>
 #include <string.h>
 #include <sys/eventfd.h>
 #include <sys/mman.h>

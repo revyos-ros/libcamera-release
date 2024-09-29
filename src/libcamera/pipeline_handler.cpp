@@ -2,7 +2,7 @@
 /*
  * Copyright (C) 2018, Google Inc.
  *
- * pipeline_handler.cpp - Pipeline handler infrastructure
+ * Pipeline handler infrastructure
  */
 
 #include "libcamera/internal/pipeline_handler.h"
@@ -22,7 +22,6 @@
 #include "libcamera/internal/camera.h"
 #include "libcamera/internal/camera_manager.h"
 #include "libcamera/internal/device_enumerator.h"
-#include "libcamera/internal/framebuffer.h"
 #include "libcamera/internal/media_device.h"
 #include "libcamera/internal/request.h"
 #include "libcamera/internal/tracepoints.h"
@@ -157,26 +156,28 @@ MediaDevice *PipelineHandler::acquireMediaDevice(DeviceEnumerator *enumerator,
  * Pipeline handlers shall not call this function directly as the Camera class
  * handles access internally.
  *
- * \context This function is \threadsafe.
+ * \context This function is called from the CameraManager thread.
  *
  * \return True if the pipeline handler was acquired, false if another process
  * has already acquired it
  * \sa release()
  */
-bool PipelineHandler::acquire()
+bool PipelineHandler::acquire(Camera *camera)
 {
-	MutexLocker locker(lock_);
-
-	if (useCount_) {
-		++useCount_;
-		return true;
+	if (useCount_ == 0) {
+		for (std::shared_ptr<MediaDevice> &media : mediaDevices_) {
+			if (!media->lock()) {
+				unlockMediaDevices();
+				return false;
+			}
+		}
 	}
 
-	for (std::shared_ptr<MediaDevice> &media : mediaDevices_) {
-		if (!media->lock()) {
+	if (!acquireDevice(camera)) {
+		if (useCount_ == 0)
 			unlockMediaDevices();
-			return false;
-		}
+
+		return false;
 	}
 
 	++useCount_;
@@ -195,21 +196,43 @@ bool PipelineHandler::acquire()
  * Pipeline handlers shall not call this function directly as the Camera class
  * handles access internally.
  *
- * \context This function is \threadsafe.
+ * \context This function is called from the CameraManager thread.
  *
  * \sa acquire()
  */
 void PipelineHandler::release(Camera *camera)
 {
-	MutexLocker locker(lock_);
-
 	ASSERT(useCount_);
-
-	unlockMediaDevices();
 
 	releaseDevice(camera);
 
+	if (useCount_ == 1)
+		unlockMediaDevices();
+
 	--useCount_;
+}
+
+/**
+ * \brief Acquire resources associated with this camera
+ * \param[in] camera The camera for which to acquire resources
+ *
+ * Pipeline handlers may override this in order to get resources such as opening
+ * devices and allocating buffers when a camera is acquired.
+ *
+ * This is used by the uvcvideo pipeline handler to delay opening /dev/video#
+ * until the camera is acquired to avoid excess power consumption. The delayed
+ * opening of /dev/video# is a special case because the kernel uvcvideo driver
+ * powers on the USB device as soon as /dev/video# is opened. This behavior
+ * should *not* be copied by other pipeline handlers.
+ *
+ * \context This function is called from the CameraManager thread.
+ *
+ * \return True on success, false on failure
+ * \sa releaseDevice()
+ */
+bool PipelineHandler::acquireDevice([[maybe_unused]] Camera *camera)
+{
+	return true;
 }
 
 /**
@@ -218,6 +241,15 @@ void PipelineHandler::release(Camera *camera)
  *
  * Pipeline handlers may override this in order to perform cleanup operations
  * when a camera is released, such as freeing memory.
+ *
+ * This is called once for every camera that is released. If there are resources
+ * shared by multiple cameras then the pipeline handler must take care to not
+ * release them until releaseDevice() has been called for all previously
+ * acquired cameras.
+ *
+ * \context This function is called from the CameraManager thread.
+ *
+ * \sa acquireDevice()
  */
 void PipelineHandler::releaseDevice([[maybe_unused]] Camera *camera)
 {
@@ -649,7 +681,7 @@ void PipelineHandler::registerCamera(std::shared_ptr<Camera> camera)
  */
 void PipelineHandler::hotplugMediaDevice(MediaDevice *media)
 {
-	media->disconnected.connect(this, [=]() { mediaDeviceDisconnected(media); });
+	media->disconnected.connect(this, [this, media] { mediaDeviceDisconnected(media); });
 }
 
 /**
@@ -717,6 +749,13 @@ void PipelineHandler::disconnect()
  * \brief Retrieve the pipeline handler name
  * \context This function shall be \threadsafe.
  * \return The pipeline handler name
+ */
+
+/**
+ * \fn PipelineHandler::cameraManager() const
+ * \brief Retrieve the CameraManager that this pipeline handler belongs to
+ * \context This function is \threadsafe.
+ * \return The CameraManager for this pipeline handler
  */
 
 /**
@@ -795,6 +834,28 @@ std::vector<PipelineHandlerFactoryBase *> &PipelineHandlerFactoryBase::factories
 }
 
 /**
+ * \brief Return the factory for the pipeline handler with name \a name
+ * \param[in] name The pipeline handler name
+ * \return The factory of the pipeline with name \a name, or nullptr if not found
+ */
+const PipelineHandlerFactoryBase *PipelineHandlerFactoryBase::getFactoryByName(const std::string &name)
+{
+	const std::vector<PipelineHandlerFactoryBase *> &factories =
+		PipelineHandlerFactoryBase::factories();
+
+	auto iter = std::find_if(factories.begin(),
+				 factories.end(),
+				 [&name](const PipelineHandlerFactoryBase *f) {
+					 return f->name() == name;
+				 });
+
+	if (iter != factories.end())
+		return *iter;
+
+	return nullptr;
+}
+
+/**
  * \class PipelineHandlerFactory
  * \brief Registration of PipelineHandler classes and creation of instances
  * \tparam _PipelineHandler The pipeline handler class type for this factory
@@ -830,6 +891,8 @@ std::vector<PipelineHandlerFactoryBase *> &PipelineHandlerFactoryBase::factories
  * \def REGISTER_PIPELINE_HANDLER
  * \brief Register a pipeline handler with the pipeline handler factory
  * \param[in] handler Class name of PipelineHandler derived class to register
+ * \param[in] name Name assigned to the pipeline handler, matching the pipeline
+ * subdirectory name in the source tree.
  *
  * Register a PipelineHandler subclass with the factory and make it available to
  * try and match devices.

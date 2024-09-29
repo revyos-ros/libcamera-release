@@ -2,8 +2,7 @@
 /*
  * Copyright (C) 2020, Linaro
  *
- * viewfinder_GL.h - OpenGL Viewfinder for rendering by OpenGL shader
- *
+ * OpenGL Viewfinder for rendering by OpenGL shader
  */
 
 #pragma once
@@ -52,7 +51,6 @@ Q_SIGNALS:
 protected:
 	void initializeGL() override;
 	void paintGL() override;
-	void resizeGL(int w, int h) override;
 	QSize sizeHint() const override;
 
 private:
@@ -89,6 +87,7 @@ private:
 
 	/* Common texture parameters */
 	GLuint textureMinMagFilters_;
+	GLuint projMatrixUniform_;
 
 	/* YUV texture parameters */
 	GLuint textureUniformU_;

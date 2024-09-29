@@ -2,12 +2,10 @@
 /*
  * Copyright (C) 2019, Google Inc.
  *
- * event_dispatcher.h - Event dispatcher
+ * Event dispatcher
  */
 
 #pragma once
-
-#include <vector>
 
 #include <libcamera/base/private.h>
 

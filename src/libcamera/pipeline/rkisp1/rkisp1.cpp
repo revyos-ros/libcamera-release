@@ -2,14 +2,13 @@
 /*
  * Copyright (C) 2019, Google Inc.
  *
- * rkisp1.cpp - Pipeline handler for Rockchip ISP1
+ * Pipeline handler for Rockchip ISP1
  */
 
 #include <algorithm>
-#include <array>
-#include <iomanip>
 #include <memory>
 #include <numeric>
+#include <optional>
 #include <queue>
 
 #include <linux/media-bus-format.h>
@@ -110,7 +109,7 @@ public:
 	std::unique_ptr<ipa::rkisp1::IPAProxyRkISP1> ipa_;
 
 private:
-	void paramFilled(unsigned int frame);
+	void paramFilled(unsigned int frame, unsigned int bytesused);
 	void setSensorControls(unsigned int frame,
 			       const ControlList &sensorControls);
 
@@ -351,13 +350,8 @@ int RkISP1CameraData::loadIPA(unsigned int hwRevision)
 	std::string ipaTuningFile;
 	char const *configFromEnv = utils::secure_getenv("LIBCAMERA_RKISP1_TUNING_FILE");
 	if (!configFromEnv || *configFromEnv == '\0') {
-		ipaTuningFile = ipa_->configurationFile(sensor_->model() + ".yaml");
-		/*
-		 * If the tuning file isn't found, fall back to the
-		 * 'uncalibrated' configuration file.
-		 */
-		if (ipaTuningFile.empty())
-			ipaTuningFile = ipa_->configurationFile("uncalibrated.yaml");
+		ipaTuningFile =
+			ipa_->configurationFile(sensor_->model() + ".yaml", "uncalibrated.yaml");
 	} else {
 		ipaTuningFile = std::string(configFromEnv);
 	}
@@ -379,15 +373,14 @@ int RkISP1CameraData::loadIPA(unsigned int hwRevision)
 	return 0;
 }
 
-void RkISP1CameraData::paramFilled(unsigned int frame)
+void RkISP1CameraData::paramFilled(unsigned int frame, unsigned int bytesused)
 {
 	PipelineHandlerRkISP1 *pipe = RkISP1CameraData::pipe();
 	RkISP1FrameInfo *info = frameInfo_.find(frame);
 	if (!info)
 		return;
 
-	info->paramBuffer->_d()->metadata().planes()[0].bytesused =
-		sizeof(struct rkisp1_params_cfg);
+	info->paramBuffer->_d()->metadata().planes()[0].bytesused = bytesused;
 	pipe->param_->queueBuffer(info->paramBuffer);
 	pipe->stat_->queueBuffer(info->statBuffer);
 
@@ -481,9 +474,9 @@ CameraConfiguration::Status RkISP1CameraConfiguration::validate()
 		status = Adjusted;
 	}
 
-	Transform requestedTransform = transform;
-	Transform combined = sensor->validateTransform(&transform);
-	if (transform != requestedTransform)
+	Orientation requestedOrientation = orientation;
+	combinedTransform_ = data_->sensor_->computeTransform(&orientation);
+	if (orientation != requestedOrientation)
 		status = Adjusted;
 
 	/*
@@ -594,8 +587,6 @@ CameraConfiguration::Status RkISP1CameraConfiguration::validate()
 
 	if (sensorFormat_.size.isNull())
 		sensorFormat_.size = sensor->resolution();
-
-	combinedTransform_ = combined;
 
 	return status;
 }
@@ -763,7 +754,7 @@ int PipelineHandlerRkISP1::configure(Camera *camera, CameraConfiguration *c)
 
 	/* YUYV8_2X8 is required on the ISP source path pad for YUV output. */
 	if (!isRaw_)
-		format.mbus_code = MEDIA_BUS_FMT_YUYV8_2X8;
+		format.code = MEDIA_BUS_FMT_YUYV8_2X8;
 
 	LOG(RkISP1, Debug)
 		<< "Configuring ISP output pad with " << format
@@ -802,7 +793,7 @@ int PipelineHandlerRkISP1::configure(Camera *camera, CameraConfiguration *c)
 	}
 
 	V4L2DeviceFormat paramFormat;
-	paramFormat.fourcc = V4L2PixelFormat(V4L2_META_FMT_RK_ISP1_PARAMS);
+	paramFormat.fourcc = V4L2PixelFormat(V4L2_META_FMT_RK_ISP1_EXT_PARAMS);
 	ret = param_->setFormat(&paramFormat);
 	if (ret)
 		return ret;
@@ -821,6 +812,7 @@ int PipelineHandlerRkISP1::configure(Camera *camera, CameraConfiguration *c)
 		return ret;
 
 	ipaConfig.sensorControls = data->sensor_->controls();
+	ipaConfig.paramFormat = paramFormat.fourcc;
 
 	ret = data->ipa_->configure(ipaConfig, streamConfig, &data->controlInfo_);
 	if (ret) {
@@ -922,71 +914,62 @@ int PipelineHandlerRkISP1::freeBuffers(Camera *camera)
 int PipelineHandlerRkISP1::start(Camera *camera, [[maybe_unused]] const ControlList *controls)
 {
 	RkISP1CameraData *data = cameraData(camera);
+	utils::ScopeExitActions actions;
 	int ret;
 
 	/* Allocate buffers for internal pipeline usage. */
 	ret = allocateBuffers(camera);
 	if (ret)
 		return ret;
+	actions += [&]() { freeBuffers(camera); };
 
 	ret = data->ipa_->start();
 	if (ret) {
-		freeBuffers(camera);
 		LOG(RkISP1, Error)
 			<< "Failed to start IPA " << camera->id();
 		return ret;
 	}
+	actions += [&]() { data->ipa_->stop(); };
 
 	data->frame_ = 0;
 
 	if (!isRaw_) {
 		ret = param_->streamOn();
 		if (ret) {
-			data->ipa_->stop();
-			freeBuffers(camera);
 			LOG(RkISP1, Error)
 				<< "Failed to start parameters " << camera->id();
 			return ret;
 		}
+		actions += [&]() { param_->streamOff(); };
 
 		ret = stat_->streamOn();
 		if (ret) {
-			param_->streamOff();
-			data->ipa_->stop();
-			freeBuffers(camera);
 			LOG(RkISP1, Error)
 				<< "Failed to start statistics " << camera->id();
 			return ret;
 		}
+		actions += [&]() { stat_->streamOff(); };
 	}
 
 	if (data->mainPath_->isEnabled()) {
 		ret = mainPath_.start();
-		if (ret) {
-			param_->streamOff();
-			stat_->streamOff();
-			data->ipa_->stop();
-			freeBuffers(camera);
+		if (ret)
 			return ret;
-		}
+		actions += [&]() { mainPath_.stop(); };
 	}
 
 	if (hasSelfPath_ && data->selfPath_->isEnabled()) {
 		ret = selfPath_.start();
-		if (ret) {
-			mainPath_.stop();
-			param_->streamOff();
-			stat_->streamOff();
-			data->ipa_->stop();
-			freeBuffers(camera);
+		if (ret)
 			return ret;
-		}
 	}
 
 	isp_->setFrameStartEnabled(true);
 
 	activeCamera_ = camera;
-	return ret;
+
+	actions.release();
+	return 0;
 }
 
 void PipelineHandlerRkISP1::stopDevice(Camera *camera)
@@ -1324,6 +1307,6 @@ void PipelineHandlerRkISP1::statReady(FrameBuffer *buffer)
 				       data->delayedCtrls_->get(buffer->metadata().sequence));
 }
 
-REGISTER_PIPELINE_HANDLER(PipelineHandlerRkISP1)
+REGISTER_PIPELINE_HANDLER(PipelineHandlerRkISP1, "rkisp1")
 
 } /* namespace libcamera */

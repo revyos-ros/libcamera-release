@@ -2,7 +2,7 @@
 /*
  * Copyright (C) 2021-2022, Ideas On Board
  *
- * gsl.h - RkISP1 Gamma Sensor Linearization control
+ * RkISP1 Gamma Sensor Linearization control
  */
 
 #pragma once
@@ -22,7 +22,7 @@ public:
 	int init(IPAContext &context, const YamlObject &tuningData) override;
 	void prepare(IPAContext &context, const uint32_t frame,
 		     IPAFrameContext &frameContext,
-		     rkisp1_params_cfg *params) override;
+		     RkISP1Params *params) override;
 
 private:
 	uint32_t gammaDx_[2];

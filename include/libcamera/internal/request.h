@@ -2,7 +2,7 @@
 /*
  * Copyright (C) 2019, Google Inc.
  *
- * request.h - Request class private data
+ * Request class private data
  */
 
 #pragma once
@@ -10,6 +10,7 @@
 #include <chrono>
 #include <map>
 #include <memory>
+#include <unordered_set>
 
 #include <libcamera/base/event_notifier.h>
 #include <libcamera/base/timer.h>

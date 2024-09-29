@@ -2,7 +2,7 @@
 /*
  * Copyright (C) 2019, Google Inc.
  *
- * request.h - Capture request handling
+ * Capture request handling
  */
 
 #pragma once
@@ -12,7 +12,6 @@
 #include <ostream>
 #include <stdint.h>
 #include <string>
-#include <unordered_set>
 
 #include <libcamera/base/class.h>
 #include <libcamera/base/signal.h>

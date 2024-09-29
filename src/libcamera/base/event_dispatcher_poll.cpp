@@ -2,19 +2,18 @@
 /*
  * Copyright (C) 2019, Google Inc.
  *
- * event_dispatcher_poll.cpp - Poll-based event dispatcher
+ * Poll-based event dispatcher
  */
 
 #include <libcamera/base/event_dispatcher_poll.h>
 
-#include <algorithm>
-#include <chrono>
 #include <iomanip>
 #include <poll.h>
 #include <stdint.h>
 #include <string.h>
 #include <sys/eventfd.h>
 #include <unistd.h>
+#include <vector>
 
 #include <libcamera/base/event_notifier.h>
 #include <libcamera/base/log.h>

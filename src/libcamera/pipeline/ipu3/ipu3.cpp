@@ -2,11 +2,10 @@
 /*
  * Copyright (C) 2019, Google Inc.
  *
- * ipu3.cpp - Pipeline handler for Intel IPU3
+ * Pipeline handler for Intel IPU3
  */
 
 #include <algorithm>
-#include <iomanip>
 #include <memory>
 #include <queue>
 #include <vector>
@@ -19,11 +18,12 @@
 #include <libcamera/camera.h>
 #include <libcamera/control_ids.h>
 #include <libcamera/formats.h>
-#include <libcamera/ipa/ipu3_ipa_interface.h>
-#include <libcamera/ipa/ipu3_ipa_proxy.h>
 #include <libcamera/property_ids.h>
 #include <libcamera/request.h>
 #include <libcamera/stream.h>
+
+#include <libcamera/ipa/ipu3_ipa_interface.h>
+#include <libcamera/ipa/ipu3_ipa_proxy.h>
 
 #include "libcamera/internal/camera.h"
 #include "libcamera/internal/camera_lens.h"
@@ -187,9 +187,9 @@ CameraConfiguration::Status IPU3CameraConfiguration::validate()
 	 * rotation and store the final combined transform that configure() will
 	 * need to apply to the sensor to save us working it out again.
 	 */
-	Transform requestedTransform = transform;
-	combinedTransform_ = data_->cio2_.sensor()->validateTransform(&transform);
-	if (transform != requestedTransform)
+	Orientation requestedOrientation = orientation;
+	combinedTransform_ = data_->cio2_.sensor()->computeTransform(&orientation);
+	if (orientation != requestedOrientation)
 		status = Adjusted;
 
 	/* Cap the number of entries to the available streams. */
@@ -1117,19 +1117,19 @@ int PipelineHandlerIPU3::registerCameras()
 		 * returned through the ImgU main and secondary outputs.
 		 */
 		data->cio2_.bufferReady().connect(data.get(),
-					&IPU3CameraData::cio2BufferReady);
+						  &IPU3CameraData::cio2BufferReady);
 		data->cio2_.bufferAvailable.connect(
 			data.get(), &IPU3CameraData::queuePendingRequests);
 		data->imgu_->input_->bufferReady.connect(&data->cio2_,
-					&CIO2Device::tryReturnBuffer);
+							 &CIO2Device::tryReturnBuffer);
 		data->imgu_->output_->bufferReady.connect(data.get(),
-					&IPU3CameraData::imguOutputBufferReady);
+							  &IPU3CameraData::imguOutputBufferReady);
 		data->imgu_->viewfinder_->bufferReady.connect(data.get(),
-					&IPU3CameraData::imguOutputBufferReady);
+							      &IPU3CameraData::imguOutputBufferReady);
 		data->imgu_->param_->bufferReady.connect(data.get(),
-					&IPU3CameraData::paramBufferReady);
+							 &IPU3CameraData::paramBufferReady);
 		data->imgu_->stat_->bufferReady.connect(data.get(),
-					&IPU3CameraData::statBufferReady);
+							&IPU3CameraData::statBufferReady);
 
 		/* Create and register the Camera instance. */
 		const std::string &cameraId = cio2->sensor()->id();
@@ -1186,9 +1186,8 @@ int IPU3CameraData::loadIPA()
 	 * The API tuning file is made from the sensor name. If the tuning file
 	 * isn't found, fall back to the 'uncalibrated' file.
 	 */
-	std::string ipaTuningFile = ipa_->configurationFile(sensor->model() + ".yaml");
-	if (ipaTuningFile.empty())
-		ipaTuningFile = ipa_->configurationFile("uncalibrated.yaml");
+	std::string ipaTuningFile =
+		ipa_->configurationFile(sensor->model() + ".yaml", "uncalibrated.yaml");
 
 	ret = ipa_->init(IPASettings{ ipaTuningFile, sensor->model() },
 			 sensorInfo, sensor->controls(), &ipaControls_);
@@ -1420,6 +1419,6 @@ void IPU3CameraData::frameStart(uint32_t sequence)
 				*testPatternMode);
 }
 
-REGISTER_PIPELINE_HANDLER(PipelineHandlerIPU3)
+REGISTER_PIPELINE_HANDLER(PipelineHandlerIPU3, "ipu3")
 
 } /* namespace libcamera */

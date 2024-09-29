@@ -2,7 +2,7 @@
 /*
  * Copyright (C) 2019, Google Inc.
  *
- * main_window.cpp - qcam - Main application window
+ * qcam - Main application window
  */
 
 #include "main_window.h"
@@ -36,16 +36,6 @@
 #include "viewfinder_qt.h"
 
 using namespace libcamera;
-
-#if QT_VERSION < QT_VERSION_CHECK(5, 14, 0)
-/*
- * Qt::fixed was introduced in v5.14, and ::fixed deprecated in v5.15. Allow
- * usage of Qt::fixed unconditionally.
- */
-namespace Qt {
-constexpr auto fixed = ::fixed;
-} /* namespace Qt */
-#endif
 
 /**
  * \brief Custom QEvent to signal capture completion
@@ -190,7 +180,7 @@ int MainWindow::createToolbars()
 	action = toolbar_->addAction(QIcon::fromTheme("application-exit",
 						      QIcon(":x-circle.svg")),
 				     "Quit");
-	action->setShortcut(Qt::CTRL | Qt::Key_Q);
+	action->setShortcut(QKeySequence::Quit);
 	connect(action, &QAction::triggered, this, &MainWindow::quit);
 
 	/* Camera selector. */

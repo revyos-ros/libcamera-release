@@ -1,5 +1,7 @@
 .. SPDX-License-Identifier: CC-BY-SA-4.0
 
+.. include:: documentation-contents.rst
+
 .. _python-bindings:
 
 Python Bindings for libcamera
@@ -17,13 +19,13 @@ chapter lists the differences.
 Mostly these differences fall under two categories:
 
 1. Differences caused by the inherent differences between C++ and Python.
-These differences are usually caused by the use of threads or differences in
-C++ vs Python memory management.
+   These differences are usually caused by the use of threads or differences in
+   C++ vs Python memory management.
 
 2. Differences caused by the code being work-in-progress. It's not always
-trivial to create a binding in a satisfying way, and the current bindings
-contain simplified versions of the C++ API just to get forward. These
-differences are expected to eventually go away.
+   trivial to create a binding in a satisfying way, and the current bindings
+   contain simplified versions of the C++ API just to get forward. These
+   differences are expected to eventually go away.
 
 Coding Style
 ------------

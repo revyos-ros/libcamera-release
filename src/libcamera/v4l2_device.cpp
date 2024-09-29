@@ -2,14 +2,12 @@
 /*
  * Copyright (C) 2019, Google Inc.
  *
- * v4l2_device.cpp - Common base for V4L2 video devices and subdevices
+ * Common base for V4L2 video devices and subdevices
  */
 
 #include "libcamera/internal/v4l2_device.h"
 
 #include <fcntl.h>
-#include <iomanip>
-#include <limits.h>
 #include <map>
 #include <stdlib.h>
 #include <string.h>

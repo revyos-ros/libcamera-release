@@ -2,10 +2,12 @@
 /*
  * Copyright (C) 2019, Google Inc.
  *
- * logging.h - Logging infrastructure
+ * Logging infrastructure
  */
 
 #pragma once
+
+#include <ostream>
 
 namespace libcamera {
 

@@ -2,13 +2,12 @@
 /*
  * Copyright (C) 2019, Google Inc.
  *
- * stream.h - Video stream for a Camera
+ * Video stream for a Camera
  */
 
 #pragma once
 
 #include <map>
-#include <memory>
 #include <ostream>
 #include <string>
 #include <vector>
